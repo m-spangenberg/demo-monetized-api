@@ -92,8 +92,7 @@ graph TD
 
 ## Demo Endpoints
 
-Here's a few example commands you can `curl` to test the demo system.
-Things spin up with 100 credits:
+Here's a few example commands you can `curl` to test the demo system, it spins up with 100 credits on the demo API key:
 
 Demo API Key: `demo-api-key-123`
 Demo API Endpoint: `localhost:8998/api`
