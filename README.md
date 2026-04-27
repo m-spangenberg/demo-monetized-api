@@ -54,6 +54,8 @@ sequenceDiagram
 
 ## Data Flow
 
+Redis is used as a shared cache across the Validator and Billing services to manage API key states and credit balances in real-time. The API service interacts with a persistent database (SQLite) for application data and also synchronizes credit usage and ledger entries with Redis to ensure consistency across the system. The Billing service processes usage events asynchronously, allowing for eventual consistency in credit deductions while maintaining a responsive API experience.
+
 ```mermaid
 graph TD
     User[Internet / Client]
