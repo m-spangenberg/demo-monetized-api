@@ -22,14 +22,14 @@ sequenceDiagram
     Redis-->>Validator: Balance > 0
 
     alt Credits OK
-    
+
         Validator->>Redis: Reserve / Deduct Credits
         Validator-->>Kong: 200 OK + Consumer Context
 
         Kong->>API: Proxy Request
 
         alt API Error
-            API-->>Kong: 4\*\* or 5\*\* Error
+            API-->>Kong: 4** or 5** Error
             Kong->>Billing: Send Failed Usage Event
             Billing->>DB: Record Attempt / Reconcile Charges
             Kong-->>User: Forward Error
