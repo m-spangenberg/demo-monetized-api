@@ -1,6 +1,6 @@
 # demo-monetized-api
 
-This is a system design project showing a stripped-down monetized API running on my personal infrastructure. I've used Go to mock an API, validator, and billing service. This demo spins up a self-contained environment using Docker Compose that stacks Kong as the API Gateway, the three Go services, Redis, and then SQLite.
+This is a system design project showing a stripped-down monetized API running on my personal infrastructure. It is composed of Go microservices (API, Validator, and Billing) fronted by Kong as the API Gateway. Redis is used for caching authentication and credit information, with SQLite as persistence on the API service. The system is designed to demonstrate a pay-per-use API model, where consumers are charged credits for each API call based on the complexity of the request.
 
 ## System Architecture
 
@@ -54,7 +54,7 @@ sequenceDiagram
 
 ## Data Flow
 
-```
+```mermaid
 graph TD
     User[Internet / Client]
     Kong[Kong API Gateway]
