@@ -1,11 +1,56 @@
-# kong api gateway
+version: '3.8'
+services:
+  kong:
+    image: kong:latest
+    container_name: kong
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "127.0.0.1:8001:8001"  # Expose admin on localhost only
+      - "127.0.0.1:8444:8444"  # Expose admin on localhost only
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: "/kong/config.yaml"
+      KONG_PROXY_ACCESS_LOG: "/dev/stdout"
+      KONG_ADMIN_ACCESS_LOG: "/dev/stdout"
+      KONG_PROXY_ERROR_LOG: "/dev/stderr"
+      KONG_ADMIN_ERROR_LOG: "/dev/stderr"
+      KONG_ADMIN_LISTEN: "0.0.0:8001, 0.0.0:8444 ssl"
+    volumes:
+      - ./kong:/config.yml
 
-# go validator
+  go-validator:
+    build: ./go-validator
+    container_name: go-validator
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
 
-# go billing
+  go-billing:
+    build: ./go-billing
+    container_name: go-billing
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
 
-# go api
+  go-api:
+    build: ./go-api
+    container_name: go-api
+    ports:
+      - "8082:8082"
+    depends_on:
+      - redis
+    volumes:
+      - api-data:/app/data
 
-# redis
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
 
-# sqlite
+volumes:
+  redis-data:
+  api-data:
