@@ -1,6 +1,6 @@
 # demo-monetized-api
 
-This is a system design project showing a stripped-down monetized API running on my personal infrastructure. I've mocked up the API using FastAPI and used Go to mock a validator and billing service. This demo spins up a self-contained environment using Docker Compose that stacks Kong as the API Gateway, the two Go services, Redis, and then SQLite (instead of PostgreSQL).
+This is a system design project showing a stripped-down monetized API running on my personal infrastructure. I've used Go to mock an API, validator, and billing service. This demo spins up a self-contained environment using Docker Compose that stacks Kong as the API Gateway, the three Go services, Redis, and then SQLite.
 
 ```mermaid
 sequenceDiagram
@@ -31,12 +31,14 @@ sequenceDiagram
         alt API Error
             API-->>Kong: 4** or 5** Error
             Kong->>Billing: Send Failed Usage Event
-            Billing->>DB: Record Attempt / Reconcile Charges
+            Billing->>Redis: Record Attempt / Reconcile Charges
+            Redis->>DB: Store Failed Usage Record
             Kong-->>User: Forward Error
         else API Success
             API-->>Kong: 200 OK (Data)
             Kong->>Billing: Send Usage / Settlement Event
-            Billing->>DB: Persist Usage Ledger Entry
+            Billing->>Redis: Persist Usage Ledger Entry
+            Redis->>DB: Store Usage Record
             Kong-->>User: Final Response
         end
 
@@ -49,6 +51,12 @@ sequenceDiagram
 ```
 
 ## Demo Endpoints
+
+Here's a few example commands you can `curl` to test the demo system.
+Things spin up with 100 credits:
+
+Demo API Key: `demo-api-key-123`
+Demo API Endpoint: `localhost:8998/api`
 
 ### Info
 
@@ -130,17 +138,4 @@ curl -X POST -H "Authorization: Bearer demo-api-key-123" http://localhost:8998/a
     "duration_ms": 150,
     "result": "Base64-encoded data string"
 }
-```
-
-## Demo Requests
-
-Here's a few example commands you can `curl` to test the system.
-The system starts off with 100 credits for the demo API key:
-
-Demo API Key: `demo-api-key-123`
-Demo API Endpoint: `localhost:8998/api`
-
-```bash
-# Valid request with sufficient credits
-curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8998/api/v1/work
 ```
