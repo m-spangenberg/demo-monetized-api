@@ -2,6 +2,8 @@
 
 This is a system design project showing a stripped-down monetized API running on my personal infrastructure. I've used Go to mock an API, validator, and billing service. This demo spins up a self-contained environment using Docker Compose that stacks Kong as the API Gateway, the three Go services, Redis, and then SQLite.
 
+## System Architecture
+
 ```mermaid
 sequenceDiagram
     participant User as Internet / Client
@@ -48,6 +50,52 @@ sequenceDiagram
         Kong-->>User: Error Response
 
     end
+```
+
+## Data Flow
+
+```
+graph TD
+    User[Internet / Client]
+    Kong[Kong API Gateway]
+    Redis[Redis Cache]
+    
+    subgraph "Go API Service (The Application)"
+        APILogic[Core API Logic]
+        MainDB[SQLite/Postgres DB]
+        CacheManager[Internal Cache Manager]
+    end
+
+    subgraph "Go Validator Service"
+        AuthLogic[Auth & Credit Validation]
+    end
+
+    subgraph "Go Billing Service"
+        BillingLogic[Credit Ledger & Usage Settlement]
+    end
+
+    %% DATA FLOWS
+
+    %% 1. Ingress and Validation
+    User -->|API Request Bearer Token | Kong
+    Kong -->|ForwardAuth Check| AuthLogic
+    AuthLogic <-->|1. Read/Write Auth State & Balance| Redis
+    AuthLogic -.->|2. Respond: Allow/Deny| Kong
+
+    %% 2. The Core Request Flow (The "Main DB")
+    Kong -->|3. Proxy Authorized Request| APILogic
+    APILogic <-->|4. Read/Write App Data e.g., Users, Posts| MainDB
+    
+    %% 3. Maintaining Data Consistency (The Key Integration)
+    %% The API logic reads Redis to see if changes happened, 
+    %% OR the API logic listens to an event stream.
+    APILogic -->|5a. Poll for Credit Changes Or Event Hook| CacheManager
+    CacheManager <-->|5b. Synchronize Balance| Redis
+    CacheManager -->|5c. Persist Ledger/User Balance Update| MainDB
+
+    %% 4. Post-Request Async Processing
+    Kong -.->|6a. Async 'Usage' Event| BillingLogic
+    BillingLogic <-->|6b. Write Ledger Entry / Adjust Balance| Redis
 ```
 
 ## Demo Endpoints
