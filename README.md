@@ -61,7 +61,7 @@ graph TD
     Kong[Kong API Gateway]
     Redis[Redis Cache]
     
-    subgraph "Go API Service (The Application)"
+    subgraph "Go API Service"
         APILogic[Core API Logic]
         APIDB[SQLite]
     end
@@ -81,11 +81,11 @@ graph TD
     AuthLogic -.->|2. Respond: Allow/Deny| Kong
 
     Kong -->|3. Proxy Authorized Request| APILogic
-    APILogic <-->|4. Read/Write App Data e.g., Users, Posts| APIDB
+    APILogic <-->|4. Read/Write Service Data| APIDB
 
     Kong -.->|6a. Async Billing Event| BillingLogic
-    BillingLogic <-->|6b. Reconcile Balance| Redis
-    BillingLogic <-->|6c. Persist Ledger Entry| BillingDB
+    BillingLogic -->|6b. Reconcile Balance| Redis
+    BillingLogic <-->|6c. Read/Write Credit Ledger| BillingDB
 ```
 
 ## Demo Endpoints
