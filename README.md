@@ -25,15 +25,14 @@ sequenceDiagram
 
     alt Credits OK
 
-        Validator->>Redis: Reserve / Deduct Credits
-        Validator-->>Kong: 200 OK + Consumer Context
+        Validator-->>Kong: 200 OK
 
         Kong->>API: Proxy Request
 
         alt API Error
             API-->>Kong: 4** or 5** Error
             Kong->>Billing: Send Failed Usage Event
-            Billing->>Redis: Record Attempt / Reconcile Charges
+            Billing->>Redis: Reconcile Charges
             Redis->>DB: Store Failed Usage Record
             Kong-->>User: Forward Error
         else API Success
@@ -64,8 +63,7 @@ graph TD
     
     subgraph "Go API Service (The Application)"
         APILogic[Core API Logic]
-        MainDB[SQLite/Postgres DB]
-        CacheManager[Internal Cache Manager]
+        APIDB[SQLite]
     end
 
     subgraph "Go Validator Service"
@@ -74,22 +72,20 @@ graph TD
 
     subgraph "Go Billing Service"
         BillingLogic[Credit Ledger & Usage Settlement]
+        BillingDB[SQLite]
     end
 
     User -->|API Request Bearer Token | Kong
     Kong -->|ForwardAuth Check| AuthLogic
-    AuthLogic <-->|1. Read/Write Auth State & Balance| Redis
+    AuthLogic <-->|1. Read Auth State & Balance| Redis
     AuthLogic -.->|2. Respond: Allow/Deny| Kong
 
     Kong -->|3. Proxy Authorized Request| APILogic
-    APILogic <-->|4. Read/Write App Data e.g., Users, Posts| MainDB
-    
-    APILogic -->|5a. Poll for Credit Changes Or Event Hook| CacheManager
-    CacheManager <-->|5b. Synchronize Balance| Redis
-    CacheManager -->|5c. Persist Ledger/User Balance Update| MainDB
+    APILogic <-->|4. Read/Write App Data e.g., Users, Posts| APIDB
 
-    Kong -.->|6a. Async 'Usage' Event| BillingLogic
-    BillingLogic <-->|6b. Write Ledger Entry / Adjust Balance| Redis
+    Kong -.->|6a. Async Billing Event| BillingLogic
+    BillingLogic <-->|6b. Reconcile Balance| Redis
+    BillingLogic <-->|6c. Persist Ledger Entry| BillingDB
 ```
 
 ## Demo Endpoints
