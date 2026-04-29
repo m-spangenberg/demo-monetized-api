@@ -75,13 +75,14 @@ graph TD
         BillingDB[SQLite]
     end
 
-    User -->|API Request Bearer Token | Kong
-    Kong -->|ForwardAuth Check| AuthLogic
-    AuthLogic <-->|1. Read Auth State & Balance| Redis
-    AuthLogic -.->|2. Respond: Allow/Deny| Kong
+    User -->|1. API Request Bearer Token | Kong
+    Kong -->|2a. ForwardAuth Check| AuthLogic
+    AuthLogic <-->|2b. Read Auth State & Balance| Redis
+    AuthLogic -.->|2c. Respond: Allow/Deny| Kong
 
-    Kong -->|3. Proxy Authorized Request| APILogic
-    APILogic <-->|4. Read/Write Service Data| APIDB
+    Kong -->|3a. Proxy Authorized Request| APILogic
+    APILogic <-->|3b. Read/Write Service Data| APIDB
+    APILogic -->|3c. Reconcile API Metrics| Redis
 
     Kong -.->|6a. Async Billing Event| BillingLogic
     BillingLogic -->|6b. Reconcile Balance| Redis
