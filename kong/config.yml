@@ -1,0 +1,46 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: go-api-service
+    url: http://go-api:8082
+    routes:
+      - name: api-route
+        paths:
+          - /service
+        plugins:
+          - name: request-transformer
+            config:
+              add:
+                headers:
+                  - "X-Service-Name: go-api"
+
+  - name: go-billing-service
+    url: http://go-billing:8081
+    routes:
+      - name: billing-route
+        paths:
+          - /billing
+
+plugins:
+  - name: pre-function
+    config:
+      access:
+        - |
+          local http = require "resty.http"
+          local client = http.new()
+          local res, err = client:request_uri("http://go-validator:8080/api/v1/validate", {
+            method = "GET",
+            headers = {
+              ["X-API-Key"] = kong.request.get_header("X-API-Key") or ""
+            }
+          })
+
+          if not res then
+            kong.log.err("Validation failed: ", err)
+            return kong.response.exit(500, { message = "Internal validation error" })
+          end
+
+          if res.status ~= 200 then
+            return kong.response.exit(res.status, { message = res.body })
+          end
