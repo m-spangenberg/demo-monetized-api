@@ -3,17 +3,64 @@ _transform: true
 
 services:
   - name: go-api-service
-    url: http://go-api:8082/api/v1/service
+    url: http://go-api:8082/api/v1
     routes:
       - name: api-route
         paths:
-          - /service
+          - /api/v1
         plugins:
-          - name: request-transformer
+          - name: pre-function
             config:
-              add:
-                headers:
-                  - "X-Service-Name: go-api"
+              access:
+                - |
+                  local http = require "resty.http"
+                  local client = http.new()
+                  local res, err = client:request_uri("http://go-validator:8080/api/v1/validate", {
+                    method = "GET",
+                    headers = {
+                      ["Authorization"] = kong.request.get_header("Authorization") or ""
+                    }
+                  })
+
+                  if not res then
+                    kong.log.err("Validation failed: ", err)
+                    return kong.response.exit(500, { message = "Internal validation error" })
+                  end
+
+                  if res.status ~= 200 then
+                    return kong.response.exit(res.status, { message = res.body })
+                  end
+
+          - name: post-function
+            config:
+              header_filter:
+                - |
+                  -- Capture the cost from the upstream header
+                  ngx.ctx.credits_usage = kong.response.get_header("X-Credits-Usage")
+              log:
+                - |
+                  -- If request was successful and we have a cost, trigger billing settlement
+                  local status = kong.response.get_status()
+                  local usage = ngx.ctx.credits_usage
+                  
+                  if status == 200 and usage then
+                    local http = require "resty.http"
+                    local client = http.new()
+                    local api_key = kong.request.get_header("Authorization")
+                    
+                    -- Fire and forget billing settlement
+                    ngx.timer.at(0, function()
+                      local res, err = client:request_uri("http://go-billing:8081/api/v1/billing?amount=" .. usage, {
+                        method = "POST",
+                        headers = {
+                          ["Authorization"] = api_key
+                        }
+                      })
+                      if not res then
+                        kong.log.err("Failed to trigger automated billing: ", err)
+                      end
+                    end)
+                  end
 
   - name: go-billing-service
     url: http://go-billing:8081/api/v1/billing
@@ -21,26 +68,3 @@ services:
       - name: billing-route
         paths:
           - /billing
-
-plugins:
-  - name: pre-function
-    config:
-      access:
-        - |
-          local http = require "resty.http"
-          local client = http.new()
-          local res, err = client:request_uri("http://go-validator:8080/api/v1/validate", {
-            method = "GET",
-            headers = {
-              ["X-API-Key"] = kong.request.get_header("X-API-Key") or ""
-            }
-          })
-
-          if not res then
-            kong.log.err("Validation failed: ", err)
-            return kong.response.exit(500, { message = "Internal validation error" })
-          end
-
-          if res.status ~= 200 then
-            return kong.response.exit(res.status, { message = res.body })
-          end
