@@ -92,10 +92,31 @@ You can test the monetization flow using the following `curl` commands.
 ```bash
 # Check initial info (should show 100.00 credits)
 curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8000/api/v1/info
+# {
+#   "balance":100,
+#   "description":"A demo API. See more at https://api.domain.tld/docs",
+#   "name":"Demo Monetized API",
+#   "version":"0.0.1"
+# }
 
 # Perform work (deducts 5 credits asynchronously)
 curl -X POST -H "Authorization: Bearer demo-api-key-123" http://localhost:8000/api/v1/work/medium
+# {
+#   "balance":95,
+#   "credits_used":5,
+#   "duration_ms":280,
+#   "result":"Base64-encoded data string representing medium work",
+#   "status":"success",
+#   "timestamp":"2026-05-07T19:28:25Z"
+# }
 
 # Check health (should show updated balance)
 curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8000/api/v1/health
+# {
+#   "balance":95,
+#   "latency_ms":107,
+#   "status":"healthy",
+#   "timestamp":"2026-05-07T19:25:10Z",
+#   "uptime":"72h"
+# }
 ```
