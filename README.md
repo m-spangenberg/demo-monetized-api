@@ -7,49 +7,65 @@ This is a system design project showing a stripped-down monetized API running on
 ```mermaid
 sequenceDiagram
     participant User as Internet / Client
-    participant CF as Cloudflare
     participant Kong as Kong (API Gateway)
     participant Validator as Go Validator Service
+    participant API as Go API Service
     participant Billing as Go Billing Service
     participant Redis as Redis (Auth/Credits)
-    participant DB as Usage Database
-    participant API as api.domain.tld
 
-    User->>CF: Request with Bearer Token
-    CF->>Kong: Forward through CF Tunnel
+    User->>Kong: Request with X-API-Key Header
+    
+    Kong->>Validator: GET /api/v1/validate (via pre-function plugin)
+    Validator->>Redis: GET <api-key>
+    Redis-->>Validator: resCredits > 0
+    Validator-->>Kong: 200 OK
 
-    Kong->>Validator: ForwardAuth (Check Headers / API Key)
+    Kong->>API: Proxy Request to /service
+    API-->>Kong: 200 OK (Data)
+    Kong-->>User: Final Response
 
-    Validator->>Redis: Get Key Status & Credit Balance
-    Redis-->>Validator: Balance > 0
-
-    alt Credits OK
-
-        Validator-->>Kong: 200 OK
-
-        Kong->>API: Proxy Request
-
-        alt API Error
-            API-->>Kong: 4** or 5** Error
-            Kong->>Billing: Send Failed Usage Event
-            Billing->>Redis: Reconcile Charges
-            Redis->>DB: Store Failed Usage Record
-            Kong-->>User: Forward Error
-        else API Success
-            API-->>Kong: 200 OK (Data)
-            Kong->>Billing: Send Usage / Settlement Event
-            Billing->>Redis: Persist Usage Ledger Entry
-            Redis->>DB: Store Usage Record
-            Kong-->>User: Final Response
-        end
-
-    else Insufficient Credits or Invalid Key
-
-        Validator-->>Kong: 402 Payment Required / 401 Unauthorized
-        Kong-->>User: Error Response
-
-    end
+    Note over User,Redis: Billing settlement is triggered manually in this demo
+    User->>Billing: POST /api/v1/billing?amount=X
+    Billing->>Redis: SET <api-key> <new-balance>
 ```
+
+## Getting Started
+
+### Prerequisites
+- Docker and Docker Compose installed.
+
+### Start the Demo
+1. Clone the repository and navigate to the project root.
+2. Spin up the entire stack:
+   ```bash
+   docker compose up --build
+   ```
+3. The services will be available at:
+   - **Kong Gateway**: http://localhost:8000
+   - **Go API**: http://localhost:8082
+   - **Go Billing**: http://localhost:8081
+   - **Go Validator**: http://localhost:8080
+
+## Demo Endpoints
+
+You can test the monetization flow using the following `curl` commands. The system initializes with a demo key containing **100 credits**.
+
+**Demo API Key:** `demo-api-key-123`
+
+### 1. Access the Protected API
+Access the API through the Kong Gateway. The gateway will automatically call the validator service:
+```bash
+curl -H "X-API-Key: demo-api-key-123" http://localhost:8000/service
+```
+
+### 2. Settle Billing (Deduct Credits)
+Manually trigger a billing settlement to simulate usage costs:
+```bash
+curl -X POST -H "X-API-Key: demo-api-key-123" "http://localhost:8081/api/v1/billing?amount=10"
+```
+
+### 3. Verify Insufficient Credits
+If you deduct enough credits to reach zero, the Kong gateway (via the validator) will block further requests with a `402 Payment Required` error.
 
 ## Data Flow
 
@@ -91,12 +107,24 @@ graph TD
 
 ## Demo Endpoints
 
-Here's a few example commands you can `curl` to test the demo system, it spins up with 100 credits on the demo API key:
+You can test the monetization flow using the following `curl` commands. The system initializes with a demo key containing **100 credits**.
 
-Demo API Key: `demo-api-key-123`
-Demo API Endpoint: `localhost:8998/api`
+**Demo API Key:** `demo-api-key-123`
 
-### Info
+### 1. Access the Protected API
+Access the API through the Kong Gateway. The gateway will automatically call the validator service:
+```bash
+curl -H "X-API-Key: demo-api-key-123" http://localhost:8000/service
+```
+
+### 2. Settle Billing (Deduct Credits)
+Manually trigger a billing settlement to simulate usage costs:
+```bash
+curl -X POST -H "X-API-Key: demo-api-key-123" "http://localhost:8081/api/v1/billing?amount=10"
+```
+
+### 3. Verify Insufficient Credits
+If you deduct enough credits to reach zero, the Kong gateway (via the validator) will block further requests with a `402 Payment Required` error.
 
 `GET api/v1/info` - Returns basic information about the API and its usage.
 
