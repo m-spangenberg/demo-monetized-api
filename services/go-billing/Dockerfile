@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev
 
@@ -7,6 +7,7 @@ WORKDIR /src
 COPY . .
 
 WORKDIR /src/services/go-billing
+RUN go mod tidy
 RUN go mod download
 RUN CGO_ENABLED=1 GOOS=linux go build -o /app/main main.go
 

@@ -150,16 +150,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error settling billing: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("Billing for API key %s settled for %.2f credits", apiKey, amount)))
-	})
-
-	// Start the server
-	fmt.Println("Go Billing is running on port 8081...")
-	http.ListenAndServe(":8081", nil)
-}
