@@ -30,23 +30,6 @@ sequenceDiagram
     Billing->>Redis: SET <api-key> <new-balance>
 ```
 
-## Getting Started
-
-### Prerequisites
-- Docker and Docker Compose installed.
-
-### Start the Demo
-1. Clone the repository and navigate to the project root.
-2. Spin up the entire stack:
-   ```bash
-   docker compose up --build
-   ```
-3. The services will be available at:
-   - **Kong Gateway**: http://localhost:8000
-   - **Go API**: http://localhost:8082
-   - **Go Billing**: http://localhost:8081
-   - **Go Validator**: http://localhost:8080
-
 ## Data Flow
 
 Redis is used as a shared cache across the Validator and Billing services to manage API key states and credit balances in real-time. The API service interacts with a persistent database (SQLite) for application data and also synchronizes credit usage and ledger entries with Redis to ensure consistency across the system. The Billing service processes usage events asynchronously, allowing for eventual consistency in credit deductions while maintaining a responsive API experience.
@@ -84,6 +67,23 @@ graph TD
     BillingLogic -->|6b. Reconcile Balance| Redis
     BillingLogic <-->|6c. Read/Write Credit Ledger| BillingDB
 ```
+
+## Starting the Demo
+
+1. Clone the repository and navigate to the project root.
+    ```bash
+    git clone https://github.com/m-spangneberg/demo-monetized-api.git
+    cd demo-monetized-api
+    ```
+2. Spin up the entire stack:
+   ```bash
+   docker compose up --build
+   ```
+3. The services will be available at:
+   - **Kong Gateway**: http://localhost:8000
+   - **Go API**: http://localhost:8082
+   - **Go Billing**: http://localhost:8081
+   - **Go Validator**: http://localhost:8080
 
 ## Demo Endpoints
 
