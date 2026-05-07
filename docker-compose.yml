@@ -16,39 +16,51 @@ services:
       KONG_ADMIN_ERROR_LOG: "/dev/stderr"
       KONG_ADMIN_LISTEN: "0.0.0:8001, 0.0.0:8444 ssl"
     volumes:
-      - ./kong:/config.yml
-
-  go-validator:
-    build: ./go-validator
-    container_name: go-validator
-    ports:
-      - "8080:8080"
-    depends_on:
-      - redis
-
-  go-billing:
-    build: ./go-billing
-    container_name: go-billing
-    ports:
-      - "8081:8081"
-    depends_on:
-      - redis
-
-  go-api:
-    build: ./go-api
-    container_name: go-api
-    ports:
-      - "8082:8082"
-    depends_on:
-      - redis
-    volumes:
-      - api-data:/app/data
+      - ./kong/config.yml:/kong/config.yml
 
   redis:
     image: redis:latest
     container_name: redis
     ports:
       - "6379:6379"
+
+  go-validator:
+    build:
+      context: .
+      dockerfile: ./services/go-validator/Dockerfile
+    container_name: go-validator
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+
+  go-billing:
+    build:
+      context: .
+      dockerfile: ./services/go-billing/Dockerfile
+    container_name: go-billing
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+
+  go-api:
+    build:
+      context: .
+      dockerfile: ./services/go-api/Dockerfile
+    container_name: go-api
+    ports:
+      - "8082:8082"
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+    volumes:
+      - api-data:/app/data
 
 volumes:
   redis-data:
