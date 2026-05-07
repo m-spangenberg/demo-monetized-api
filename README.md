@@ -13,19 +13,20 @@ sequenceDiagram
     participant Billing as Go Billing Service
     participant Redis as Redis (Auth/Credits)
 
-    User->>Kong: Request with X-API-Key Header
+    User->>Kong: Request with Authorization: Bearer <key>
     
-    Kong->>Validator: GET /api/v1/validate (via pre-function plugin)
+    Kong->>Validator: GET /api/v1/validate (pre-function)
     Validator->>Redis: GET <api-key>
     Redis-->>Validator: resCredits > 0
     Validator-->>Kong: 200 OK
 
-    Kong->>API: Proxy Request to /service
-    API-->>Kong: 200 OK (Data)
-    Kong-->>User: Final Response
-
-    Note over User,Redis: Billing settlement is triggered manually in this demo
-    User->>Billing: POST /api/v1/billing?amount=X
+    Kong->>API: Proxy Request (e.g. /api/v1/work/medium)
+    API-->>Kong: 200 OK (+ X-Credits-Usage: 5)
+    
+    Kong->>User: Final Response
+    
+    Note over Kong,Billing: Automated Post-Processing
+    Kong->>Billing: POST /api/v1/billing?amount=5 (post-function log)
     Billing->>Redis: SET <api-key> <new-balance>
 ```
 
@@ -45,27 +46,6 @@ sequenceDiagram
    - **Go API**: http://localhost:8082
    - **Go Billing**: http://localhost:8081
    - **Go Validator**: http://localhost:8080
-
-## Demo Endpoints
-
-You can test the monetization flow using the following `curl` commands. The system initializes with a demo key containing **100 credits**.
-
-**Demo API Key:** `demo-api-key-123`
-
-### 1. Access the Protected API
-Access the API through the Kong Gateway. The gateway will automatically call the validator service:
-```bash
-curl -H "X-API-Key: demo-api-key-123" http://localhost:8000/service
-```
-
-### 2. Settle Billing (Deduct Credits)
-Manually trigger a billing settlement to simulate usage costs:
-```bash
-curl -X POST -H "X-API-Key: demo-api-key-123" "http://localhost:8081/api/v1/billing?amount=10"
-```
-
-### 3. Verify Insufficient Credits
-If you deduct enough credits to reach zero, the Kong gateway (via the validator) will block further requests with a `402 Payment Required` error.
 
 ## Data Flow
 
@@ -107,101 +87,15 @@ graph TD
 
 ## Demo Endpoints
 
-You can test the monetization flow using the following `curl` commands. The system initializes with a demo key containing **100 credits**.
+You can test the monetization flow using the following `curl` commands.
 
-**Demo API Key:** `demo-api-key-123`
-
-### 1. Access the Protected API
-Access the API through the Kong Gateway. The gateway will automatically call the validator service:
 ```bash
-curl -H "X-API-Key: demo-api-key-123" http://localhost:8000/service
-```
+# Check initial info (should show 100.00 credits)
+curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8000/api/v1/info
 
-### 2. Settle Billing (Deduct Credits)
-Manually trigger a billing settlement to simulate usage costs:
-```bash
-curl -X POST -H "X-API-Key: demo-api-key-123" "http://localhost:8081/api/v1/billing?amount=10"
-```
+# Perform work (deducts 5 credits asynchronously)
+curl -X POST -H "Authorization: Bearer demo-api-key-123" http://localhost:8000/api/v1/work/medium
 
-### 3. Verify Insufficient Credits
-If you deduct enough credits to reach zero, the Kong gateway (via the validator) will block further requests with a `402 Payment Required` error.
-
-`GET api/v1/info` - Returns basic information about the API and its usage.
-
-```curl
-curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8998/api/v1/info
-```
-
-```json
-{
-  "name": "Demo Monetized API",
-  "version": "0.0.1",
-  "description": "A demo API. See more at https://api.domain.tld/docs"
-}
-```
-
-### Billing
-
-`GET api/v1/usage/<period>` - Returns a history of API usage and charges. Defaults to `last_24h` if no period is specified.
-
-```curl
-curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8998/api/v1/usage/last_24h
-```
-
-```json
-{
-  "timestamp": "2024-06-01T12:00:00Z",
-  "credits_used": 5,
-  "status": "success",
-  "balance": 95,
-  "usage_history": [
-    {
-      "timestamp": "2024-06-01T11:00:00Z",
-      "credits_used": 5,
-      "status": "success"
-    },
-    {
-      "timestamp": "2024-06-01T10:00:00Z",
-      "credits_used": 10,
-      "status": "success"
-    }
-  ]
-}
-```
-
-### Health
-
-`GET api/v1/health` - Returns the health status of the API.
-
-```curl
-curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8998/api/v1/health
-```
-
-```json
-{
-  "status": "healthy",
-  "latency_ms": 20,
-  "timestamp": "2024-06-01T12:00:00Z",
-  "uptime": "72h"
-}
-```
-
-### Consumables
-
-`POST api/v1/work/<level>` - Performs a unit of work, consuming credits, returns data.
-
-The `<level>` parameter can be `easy`, `medium`, or `hard`, and determines the complexity and credit cost of the work.
-
-```curl
-curl -X POST -H "Authorization: Bearer demo-api-key-123" http://localhost:8998/api/v1/work/medium
-```
-
-```json
-{
-    "credits_used": 5,
-    "status": "success",
-    "timestamp": "2024-06-01T12:00:00Z",
-    "duration_ms": 150,
-    "result": "Base64-encoded data string"
-}
+# Check health (should show updated balance)
+curl -H "Authorization: Bearer demo-api-key-123" http://localhost:8000/api/v1/health
 ```
