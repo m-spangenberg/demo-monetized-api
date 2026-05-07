@@ -3,7 +3,7 @@ _transform: true
 
 services:
   - name: go-api-service
-    url: http://go-api:8082
+    url: http://go-api:8082/api/v1/service
     routes:
       - name: api-route
         paths:
@@ -16,7 +16,7 @@ services:
                   - "X-Service-Name: go-api"
 
   - name: go-billing-service
-    url: http://go-billing:8081
+    url: http://go-billing:8081/api/v1/billing
     routes:
       - name: billing-route
         paths:
