@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/m-spangenberg/demo-monetized-api/pkg/common"
 	"github.com/redis/go-redis/v9"
@@ -15,12 +16,21 @@ type ValidatorHandler struct {
 }
 
 func (h *ValidatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Retrieve API key from header
-	apiKey := r.Header.Get("X-API-Key")
+	// Retrieve API key from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	var apiKey string
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	// Fallback to X-API-Key for compatibility if needed, but prioritize Bearer
+	if apiKey == "" {
+		apiKey = r.Header.Get("X-API-Key")
+	}
 
 	// Check if API key is missing
 	if apiKey == "" {
-		http.Error(w, "Missing API key", http.StatusBadRequest)
+		http.Error(w, "Missing API key in Authorization header", http.StatusBadRequest)
 		return
 	}
 
@@ -35,8 +45,8 @@ func (h *ValidatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert the Redis value to an integer
-	resCredits, err := strconv.Atoi(result)
+	// Convert the Redis value to a float
+	resCredits, err := strconv.ParseFloat(result, 64)
 	if err != nil {
 		http.Error(w, "Stored credits are invalid", http.StatusInternalServerError)
 		return

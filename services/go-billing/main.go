@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/m-spangenberg/demo-monetized-api/pkg/common"
@@ -23,8 +24,16 @@ type BillingHandler struct {
 }
 
 func (h *BillingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Retrieve API key from header
-	apiKey := r.Header.Get("X-API-Key")
+	// Retrieve API key from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	var apiKey string
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	if apiKey == "" {
+		apiKey = r.Header.Get("X-API-Key")
+	}
 
 	// Check if API key is missing
 	if apiKey == "" {

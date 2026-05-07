@@ -2,10 +2,14 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/m-spangenberg/demo-monetized-api/pkg/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -18,42 +22,115 @@ type APIHandler struct {
 }
 
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Retrieve API key from header
-	apiKey := r.Header.Get("X-API-Key")
+	// Standardize Bearer token extraction
+	authHeader := r.Header.Get("Authorization")
+	var apiKey string
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+	}
 
-	// Check if API key is missing
 	if apiKey == "" {
-		http.Error(w, "Missing API key", http.StatusBadRequest)
+		apiKey = r.Header.Get("X-API-Key")
+	}
+
+	if apiKey == "" {
+		http.Error(w, "Missing API key in Authorization header", http.StatusBadRequest)
 		return
 	}
 
-	// Retrieve the key and value from Redis using request context
-	result, err := h.rdb.Get(r.Context(), apiKey).Result()
-	if err != nil {
-		if err == redis.Nil {
-			http.Error(w, "Invalid API key", http.StatusUnauthorized)
+	// Handle endpoints
+	switch {
+	case r.URL.Path == "/api/v1/info" && r.Method == http.MethodGet:
+		h.handleInfo(w, r, apiKey)
+	case r.URL.Path == "/api/v1/health" && r.Method == http.MethodGet:
+		h.handleHealth(w, r, apiKey)
+	case strings.HasPrefix(r.URL.Path, "/api/v1/work/") && r.Method == http.MethodPost:
+		h.handleWork(w, r, apiKey)
+	default:
+		// Fallback for the old /service endpoint if still needed for backwards compatibility during refactor
+		if r.URL.Path == "/api/v1/service" {
+			h.handleService(w, r, apiKey)
 			return
 		}
+		http.NotFound(w, r)
+	}
+}
+
+func (h *APIHandler) handleInfo(w http.ResponseWriter, r *http.Request, apiKey string) {
+	balance, _ := h.rdb.Get(r.Context(), apiKey).Float64()
+	info := map[string]interface{}{
+		"name":        "Demo Monetized API",
+		"version":     "0.0.1",
+		"description": "A demo API. See more at https://api.domain.tld/docs",
+		"balance":     balance,
+	}
+	w.Header().Set("X-Credits-Usage", "0")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
+}
+
+func (h *APIHandler) handleHealth(w http.ResponseWriter, r *http.Request, apiKey string) {
+	balance, _ := h.rdb.Get(r.Context(), apiKey).Float64()
+	health := map[string]interface{}{
+		"status":     "healthy",
+		"latency_ms": rand.Intn(100) + 50, // Simulate latency between 50-150ms
+		"timestamp":  time.Now().Format(time.RFC3339),
+		"uptime":     "72h",
+		"balance":    balance,
+	}
+	w.Header().Set("X-Credits-Usage", "0")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
+}
+
+func (h *APIHandler) handleWork(w http.ResponseWriter, r *http.Request, apiKey string) {
+	level := strings.TrimPrefix(r.URL.Path, "/api/v1/work/")
+	cost := 1.0
+	switch level {
+	case "easy":
+		cost = 1.0
+	case "medium":
+		cost = 5.0
+	case "hard":
+		cost = 10.0
+	default:
+		http.Error(w, "Invalid work level", http.StatusBadRequest)
+		return
+	}
+
+	// In a real Pay-per-use API, the API service processes the request
+	// and informs the gateway about the cost via a header.
+	w.Header().Set("X-Credits-Usage", fmt.Sprintf("%.2f", cost))
+	w.Header().Set("Content-Type", "application/json")
+
+	balance, _ := h.rdb.Get(r.Context(), apiKey).Float64()
+	result := map[string]interface{}{
+		"credits_used": cost,
+		"balance":      balance - cost,
+		"status":       "success",
+		"timestamp":    time.Now().Format(time.RFC3339),
+		"duration_ms":  rand.Intn(200) + 100, // Simulate processing time between 100-300ms
+		"result":       "Base64-encoded data string representing " + level + " work",
+	}
+
+	json.NewEncoder(w).Encode(result)
+}
+
+func (h *APIHandler) handleService(w http.ResponseWriter, r *http.Request, apiKey string) {
+	// Re-check credits just in case, though Kong should have handled it
+	result, err := h.rdb.Get(r.Context(), apiKey).Result()
+	if err != nil {
 		http.Error(w, "Error validating API key", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert the Redis value to an integer
-	resCredits, err := strconv.Atoi(result)
-	if err != nil {
-		http.Error(w, "Stored credits are invalid", http.StatusInternalServerError)
-		return
-	}
-
-	// Check the API key and credits in Redis
+	resCredits, _ := strconv.ParseFloat(result, 64)
 	if resCredits > 0 {
-		// Business logic would go here
+		w.Header().Set("X-Credits-Usage", "1.0") // Default cost for generic service
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Service operation successful"))
-		return
 	} else {
 		http.Error(w, "Insufficient credits", http.StatusPaymentRequired)
-		return
 	}
 }
 
@@ -87,7 +164,8 @@ func main() {
 
 	apiHandler := &APIHandler{db: db, rdb: rdb}
 
-	http.Handle("/api/v1/service", apiHandler)
+	// Use a prefix to catch all /api/v1/* requests
+	http.Handle("/api/v1/", apiHandler)
 
 	// Start the server
 	fmt.Println("Go API is running on port 8082...")
